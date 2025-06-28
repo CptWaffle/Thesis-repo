@@ -24,7 +24,7 @@ import scipy as sp
 from timeit import default_timer as timer
 
 ### Import python files
-from Utilities.lib.grad import *
+# from Utilities.lib.grad import *
 ###########################################################
 ### Make class for storage
 class cMaximizeLikelihood:
@@ -522,6 +522,7 @@ def MaxLikelihood(mY, bDisplay=True, bJac = True):
         Information is stored in cMaximumlikelihood class.
         In this implementation: The parameters are given by:
             dRho | vBeta | dSigma2
+        Note: This is the maximum likelihood estimator used for the FDML in thesis
     Inputs:
         mY              (iN x iT)     Vector containing the data
         bDisplay        bool, indicate whether to indicate intermediate results
@@ -949,6 +950,9 @@ def Transformed_MaxLikelihood(mY, bDisplay=True, bJac = True, bTMLE = True):
         Information is stored in cMaximumlikelihood class.
         In this implementation: The parameters are given by:
             dRho | dSigma2 | dGamma2
+        Note: This implementation is not used to obtain results in the thesis.
+        See below for the root finding alternative to this function.
+
     Inputs:
         mY              (iN x iT)     Vector containing the data
         bDisplay        bool, indicate whether to indicate intermediate results
@@ -1218,6 +1222,8 @@ def Transformed_MaxLikelihood_Root(mY):
         Estimation proceeds by root finding instead of minimization.
         In this implementation: The parameters are given by:
             dRho | dSigma2 | dGamma2
+        Note: This is the maximum likelihood estimator used for the TML in thesis.
+        Root finding implementation is much faster compared to numerical optimization.
     Inputs:
         mY              (iN x iT)     Vector containing the data
 
@@ -1397,6 +1403,8 @@ def Transformed_MaxLikelihood_Root_FD(mY):
         Estimation proceeds by root finding instead of minimization.
         In this implementation: The parameters are given by:
             dRho | dSigma2
+        Note: This function is used for testing purposes. Function estimates the
+        FDML estimates as expected. Original function used to obtain results.
     Inputs:
         mY              (iN x iT)     Vector containing the data
 
@@ -1701,7 +1709,7 @@ def Plot_HistEstimators(mPlot, vT, vKappa, vGamma, vLegend, sName):
         for i, kappa in enumerate(vKappa):
             for j, iT in enumerate(vT):
                 ax[i,j].set_xlim([-5,5])
-                if "SV" in sName:
+                if 'CS' in sName:
                     ax[i,j].set_xlim([-9,9])
                 ax[i,j].hist(mPlot[:,iTrack,:3], bins=100, density=True)
                 iN = round(iT ** (1/kappa))
@@ -1768,99 +1776,12 @@ def Monte_Carlo_Results(vT, vKappa, vGamma, vTheta, iM, vInference, vBool, sInit
     return mParam_hat, mBias, mRMSE, mCI, mInf
 
 ###########################################################
-### dY= emptyfunc(vX)
-def Time_estimators(mY):
-    """
-    Purpose:
-        Function to time how fast the estimators are.
-        All including inference results.
-
-    Inputs:
-        mY              matrix, holding simulated data
-
-    Return value:
-        prints some info
-    """
-    start = timer()
-    cARpanel = MaxLikelihood(mY, bDisplay=False)
-    end= timer()
-    print('time FDMLE:', end-start)
-    dCumulative = end-start
-    start = timer()
-    cARpanel = Transformed_MaxLikelihood_Root(mY)
-    end= timer()
-    print('time TMLE:', end-start)
-    dCumulative = dCumulative + end-start
-    start = timer()
-    dHPJ_n = estimate_HPJ(mY, 'CS-bootstrap')
-    end = timer()
-    print('time HPJ:', end-start)
-    dCumulative = dCumulative + end-start
-    start = timer()
-    dFE_n = estimate_FE_WG(mY, 'CS-bootstrap')
-    end = timer()
-    dCumulative = dCumulative + end-start
-    print('time FE:', end-start)
-    print('Total time:', dCumulative)
-
-###########################################################
-### dY= emptyfunc(vX)
-def Test_convergence(dRho, iN, iT):
-    """
-    Purpose:
-        Function to test whether sequence converges or not
-
-    Inputs:
-
-    Return value:
-        prints some info
-    """
-    iM = 10000
-    iT = 10
-    dK = 0.8
-    iN = np.floor(iT * dK **2)
-    mSigma = np.zeros((iT, iM))
-    mSigma[0,:] = dOmega
-    vRho = np.arange(0.1,0.91,0.1)
-    iI = len(vRho)
-    vSeries = np.zeros((iT, iI))
-    vFinal = np.zeros((iM, iI))
-    iMean = 10
-    vAa = np.zeros_like(vSeries)
-    r=0
-    c=0
-    vA = np.zeros(iT)
-    fig, ax = plt.subplots(3,3, figsize=(20,20))
-    for i in range(iI):
-        for s in range(iT):
-            vA[s] = vRho[i]**s
-        mXi = np.random.randn(iT,iM) * dSigmaXi * np.sqrt((1-dBeta**2))
-        for t in range(1,iT):
-            mSigma[t,:] = dOmega * (1-dBeta) + dBeta * mSigma[t-1,:] + mXi[t,:]
-        for m in range(iM):
-            vSim = mSigma[:,m]
-            for t in range(iT):
-                iS = iT - t
-                vSeries[t,i] = iN**(0.5) / iT**(1.5) * (vSim[t]-dOmega) * np.sum(vA[:(iS)])
-            vSum_Series = np.cumsum(vSeries[:,i])
-            vFinal[m,i] = vSum_Series[-1]
-        ax[r,c].hist(vFinal[:,i], bins=50)
-        r = r + 1
-        if (r % 3 == 0):
-            c = c + 1
-            r = 0
-
-###########################################################
 ### main
 def main():
     # Magic numbers
-    MASTER_bInfEq = True # Master key to apply Information matrix inequality
-    iN = 20
-    iT = 20
-    iN = round(iT ** (1/0.8))   # Note: 1/kappa
+    MASTER_bInfEq = True # Master key to apply Information matrix inequality: Keep at True
     iM = 1000
     dGamma = 0.95
-    dRho = np.exp(-iT**(-dGamma))      # Note: This is alpha in thesis
     dSigma2 = 1
     dSigma = dSigma2**(1/2)
     dNu = 5
@@ -1868,74 +1789,12 @@ def main():
     dBeta = 0.6
     dSigmaXi = 1
     dPhi = 1                    # Governs the magnitude of the fixed effect component at the initial observation
-    vTheta = np.array([dRho, dSigma, dNu, dPhi, dOmega, dBeta, dSigmaXi])
     vTheta_sim = np.array([dSigma, dNu, dOmega, dPhi, dBeta, dSigmaXi])
-    vKappa = [1, 1.2]
-    vGamma = [0.75]
-    vT = [50]
     vT = [20,50,100]
-    # vKappa = [0.6,0.8,1]
     vKappa = [0.8, 1, 1.2]              # Remove 0.6 out of consideration for now, too much computing.
     vGamma =    [0.5]
-    # vGamma =    [0.5, 0.75]
-    vGamma_e =  [1.25, 1.5, 1.75]       # More extreme parameter set
-    vGamma_e2 = [2, 2.25, 2.5]          # Most extreme parameter set
-    vGamma_e3 = [3, 3.5, 4]             # Most.3 extreme parameter set
     cols = ['C0', 'C1', 'C2', 'C3']
     vLegend = ['FDMLE', 'TMLE', 'FE', 'HPJ']
-    sName = 'testing_case'
-
-    # Initialisation (standard)
-    mY = Sim_AR_Panel(1,iN,iT,vTheta)[:,:,0]
-    vY = mY.reshape(-1,1)
-    mDn = First_diff_matrix(1,iT+1)
-
-    # Estimation
-    start = timer()
-    cARpanel = MaxLikelihood(mY, bJac=True)
-    end= timer()
-    print(end-start)
-    print(cARpanel.tx)
-    print(cARpanel.tCI)
-    print(cARpanel.tstandarderrors)
-    print(np.sqrt(cARpanel.tcovariancematrix[0,0]))
-
-    start = timer()
-    TMLE_ARpanel = Transformed_MaxLikelihood(mY)
-    end= timer()
-    print(end-start)
-    print(TMLE_ARpanel.tx)
-    print(TMLE_ARpanel.tCI)
-    print(TMLE_ARpanel.tstandarderrors)
-
-    start = timer()
-    TMLE_ARpanel = Transformed_MaxLikelihood_Root(mY)
-    end= timer()
-    print(end-start)
-    print(TMLE_ARpanel.tx)
-    print(TMLE_ARpanel.tCI)
-    print(TMLE_ARpanel.tstandarderrors)
-
-    start = timer()
-    TMLE_FD_ARpanel = Transformed_MaxLikelihood_Root_FD(mY)
-    end= timer()
-    print(end-start)
-    print(TMLE_FD_ARpanel.tx)
-    print(TMLE_FD_ARpanel.tCI)
-    print(TMLE_FD_ARpanel.tstandarderrors)
-
-    # Use other estimators
-    dHPJ_n = estimate_HPJ(mY, 'RD-bootstrap')
-    print(dHPJ_n)
-    dFE_n = estimate_FE_WG(mY, 'RD-bootstrap')
-    print(dFE_n)
-    dHPJ_n = estimate_HPJ(mY, 'CS-bootstrap')
-    print(dHPJ_n)
-    dFE_n = estimate_FE_WG(mY, 'CS-bootstrap')
-    print(dFE_n)
-
-    ### Time estimators:
-    Time_estimators(mY)
 
     ### Estimation only
     mParam_hat, mBias, mRMSE, mCI, mInf = Monte_Carlo_Results(vT, vKappa, vGamma, vTheta_sim, iM, [False, False, False], [False, False], 'Cov-Stationary', vLegend, 'CS-S')
@@ -1960,9 +1819,6 @@ def main():
     mParam_hat, mBias, mRMSE, mCI, mInf = Monte_Carlo_Results(vT, vKappa, vGamma, vTheta_sim, iM, [True, 'CS-bootstrap', 'CS-bootstrap'], [False, True], 'Increased-Cov', vLegend, 'CS-SV-IC')
     # Non-Covariance stationarity | Zero-Residual
     mParam_hat, mBias, mRMSE, mCI, mInf = Monte_Carlo_Results(vT, vKappa, vGamma, vTheta_sim, iM, [True, 'CS-bootstrap', 'CS-bootstrap'], [False, True], 'Zero-Residual', vLegend, 'CS-SV-ZR')
-
-
-
 
 ###########################################################
 ### start main
